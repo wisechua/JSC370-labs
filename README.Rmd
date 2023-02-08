@@ -7,6 +7,15 @@ output:
 link-citations: yes
 ---
 
+```{r loablibraries}
+#install.packages(c("data.table","leaflet"))
+library(data.table)
+library(dtplyr)
+library(dplyr)
+library(leaflet)
+library(tidyverse)
+library(ggplot2)
+```
 # Learning goals
 
 - Use the `merge()` function to join two datasets.
@@ -92,7 +101,15 @@ Once you are done setting up the project, you can now start working with the MET
 
 2. Load the met data from https://github.com/JSC370/jsc370-2023/blob/main/labs/lab03/met_all.gz or  (Use https://raw.githubusercontent.com/JSC370/jsc370-2023/main/labs/lab03/met_all.gz to download programmatically), and also the station data. For the latter, you can use the code we used during lecture to pre-process the stations data:
 
-```{r stations-data, eval = FALSE}
+```{r checking-file, include=FALSE, eval = TRUE}
+fn <- "https://raw.githubusercontent.com/JSC370/jsc370-2023/main/labs/lab03/met_all.gz"
+if (!file.exists("met_all.gz")) {
+  download.file(fn, destfile = "met_all.gz")}
+
+met <- data.table::fread("met_all.gz")
+```
+
+```{r stations-data, eval = TRUE}
 # Download the data
 stations <- fread("ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-history.csv")
 stations[, USAF := as.integer(USAF)]
@@ -114,16 +131,91 @@ stations <- stations[n == 1,][, n := NULL]
 ```
 
 3. Merge the data as we did during the lecture.
+```{r}
+met <- merge(x = met, y = stations, all.x = TRUE, all.y = FALSE, by.x = "USAFID", by.y= "USAF")
+### Tidyverse
+# met <- left_join(met, stations, by = c("USAFID" = "USAF"))
+met_lz <- lazy_dt(met, immutable = FALSE)
+```
+
 
 ## Question 1: Representative station for the US
 
 Across all weather stations, what is the median station in terms of temperature, wind speed, and atmospheric pressure? Look for the three weather stations that best represent continental US using the `quantile()` function. Do these three coincide?
 
+Knit the document, commit your changes, and save it on GitHub. Don't forget to add `README.md` to the tree, the first time you render it.
 ```{r}
-
+# Average for each station
+met_avg_lz <- met_lz |> 
+  group_by(USAFID) |> 
+  summarise(
+    across(
+      c(temp, wind.sp, atm.press),
+      function(x) mean(x, na.rm = TRUE)
+    )
+    # temp = mean(temp, na.rm = TRUE),
+    # wind.sp = mean(wind.sp, na.rm = TRUE),
+    # stm.press = mean(atm.press, na.rm = TRUE)
+  )
+met_avg_lz
 ```
 
-Knit the document, commit your changes, and save it on GitHub. Don't forget to add `README.md` to the tree, the first time you render it.
+```{r}
+# Median for each station
+met_med_lz <- met_avg_lz |>
+  summarise(
+    across(
+      2:4,
+      function(x) quantile(x, prob = 0.5, na.rm = TRUE)
+    )
+  )
+
+met_med_lz
+```
+
+
+```{r}
+# Temperature
+temp_us_id <- met_avg_lz |>
+  mutate(
+    temp_diff = abs(temp - met_med_lz |> pull(temp))
+    ) |> 
+  arrange(temp_diff) |>
+  slice(1) |>
+  pull (USAFID)
+
+# Wind Speed
+wind_us_id <- met_avg_lz |>
+  mutate(
+    wind_diff = abs(wind.sp - met_med_lz |> pull(wind.sp))
+    ) |> 
+  arrange(wind_diff) |>
+  slice(1) |>
+  pull (USAFID)
+
+# atm Speed
+atm_us_id <- met_avg_lz |>
+  mutate(
+    d = abs(atm.press - met_med_lz |> pull(atm.press))
+    ) |> 
+  arrange(d) |>
+  slice(1) |>
+  pull (USAFID)
+
+cat("ID with median ...",
+    "\n    temperature: ", temp_us_id,
+    "\n    wind: ", wind_us_id,
+    "\n    atm: ", atm_us_id)
+```
+
+```{r}
+met_lz |>
+  select(USAFID, lon, lat) |>
+  distinct() |>
+  filter(USAFID %in% c(temp_us_id, wind_us_id, atm_us_id))
+```
+
+These three stations does not coincide as we have three different station.
 
 ## Question 2: Representative station per state
 
@@ -132,6 +224,8 @@ Just like the previous question, you are asked to identify what is the most repr
 ```{r}
 
 ```
+
+
 
 Knit the doc and save it on GitHub.
 
