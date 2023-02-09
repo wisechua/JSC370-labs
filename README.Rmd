@@ -1,9 +1,9 @@
 ---
 title: "Lab 05 - Data Wrangling"
 output: 
-  github_document: default
   tufte::tufte_html:
     css: style.css
+  github_document: default
 link-citations: yes
 ---
 
@@ -412,7 +412,16 @@ plot(model1)
 
 ```{r}
 model2 <- gam(temp~s(wind.sp, bs = "cr", k=20), data = data.frame(met_med_lz_q5))
+```
+
+
+```{r}
 plot(model2)
+```
+
+
+```{r}
 summary(model2)
 ```
 
+The linear model has a p-value lower than 0.05 and also for the spline model. Notice that the spline model has an extremely small p-value which could possibly (but not sure) that be better than the linear model. I think the spline model will be better as the R-squared adjusted is higher.
