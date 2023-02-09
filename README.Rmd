@@ -15,6 +15,7 @@ library(dplyr)
 library(leaflet)
 library(tidyverse)
 library(ggplot2)
+library(mgcv)
 ```
 # Learning goals
 
@@ -291,8 +292,27 @@ We have checked that the result has the same number of unique states from the da
 For each state, identify what is the station that is closest to the mid-point of the state. Combining these with the stations you identified in the previous question, use `leaflet()` to visualize all ~100 points in the same figure, applying different colors for those identified in this question.
 
 ```{r}
-
+met_lon_lat_avg <- met_lz %>% group_by(STATE) %>%
+  summarise(lon = mean(lon, na.rm = TRUE),
+            lat = mean(lat, na.rm = TRUE))
+data.frame(met_lon_lat_avg)
+met_lon_lat_avg$category <- 'median'
 ```
+```{r}
+met_means_med_state_answer_filter <- met_means_med_state_answer %>% select(STATE, lat, lon)
+met_means_med_state_answer_filter$category <- 'median'
+lat_lon_answer <- rbind(met_means_med_state_answer_filter, data.frame(met_lon_lat_avg))
+lat_lon_answer
+```
+
+
+```{r}
+pal <- colorFactor(c("navy", "red"), domain = c("mean", "median"))
+leaflet(lat_lon_answer) |>
+  addProviderTiles('OpenStreetMap') |>
+  addCircleMarkers(lat = ~lat, lng = ~lon, opacity = 0.7, radius = 5, color = ~pal(category))
+```
+
 
 Knit the doc and save it on GitHub.
 
@@ -307,8 +327,27 @@ Start by computing the states' average temperature. Use that measurement to clas
 - High: temp >= 25
 
 ```{r}
-
+met_avg_state_lz_q4 <- met |> 
+  group_by(STATE) |> 
+  summarise(
+    number_of_na = sum(is.na(temp)),
+    temp = mean(temp, na.rm = TRUE),
+    wind.sp = mean(wind.sp, na.rm = TRUE),
+    atm.press = mean(atm.press, na.rm = TRUE),
+    STATE = unique(STATE), number_of_station = n()
+  ) 
+unique(data.frame(met_avg_state_lz_q4))
 ```
+
+```{r}
+met_avg_state_lz_q4 <- met_avg_state_lz_q4 %>% mutate("average temperature level" =
+  case_when(temp >= 25 ~ "High",
+            temp < 20 ~ "Low",
+            temp >=20 & temp < 25 ~ "Mid")
+)
+met_avg_state_lz_q4
+```
+
 
 Once you are done with that, you can compute the following:
 
@@ -321,7 +360,18 @@ Once you are done with that, you can compute the following:
 All by the levels described before.
 
 ```{r}
-
+met_avg_state_lz_q4_answer <- met_avg_state_lz_q4 %>% 
+  group_by(c(`average temperature level`)) %>%
+  summarise(
+    num_entries = n(),
+    num_NA = sum(number_of_na),
+    num_stations = sum(number_of_station),
+    num_states = length(STATE),
+    mean_temp = mean(temp, na.rm = TRUE),
+    mean_wind.sp = mean(wind.sp, na.rm = TRUE),
+    mean_atm.press = mean(atm.press, na.rm = TRUE)
+  )
+met_avg_state_lz_q4_answer
 ```
 
 Knit the document, commit your changes, and push them to GitHub. 
@@ -333,8 +383,36 @@ Let's practice running regression models with smooth functions on X. We need the
 
 - using your data with the median values per station, examine the association between median temperature (y) and median wind speed (x). Create a scatterplot of the two variables using ggplot2. Add both a linear regression line and a smooth line.
 
+```{r}
+met_med_lz_q5 <- met_lz |> 
+  group_by(USAFID) |> 
+  summarise(
+    temp = mean(temp, na.rm = TRUE),
+    wind.sp = mean(wind.sp, na.rm = TRUE)
+  ) 
+
+met_med_lz_q5 %>% as.data.frame() %>%
+  filter(!is.na(wind.sp) & !is.na(temp)) %>% 
+  ggplot(aes(x = wind.sp, y = temp)) +
+  geom_point() + geom_smooth(method = "lm", formula = y~x, color = "navy") + geom_smooth()
+```
+
 - fit both a linear model and a spline model (use `gam()` with a cubic regression spline on wind speed). Summarize and plot the results from the models and interpret which model is the best fit and why.
 
-```{r}
 
+```{r}
+model1 <- lm(temp ~ wind.sp, data = met_med_lz_q5)
+summary(model1)
 ```
+
+```{r}
+plot(model1)
+```
+
+
+```{r}
+model2 <- gam(temp~s(wind.sp, bs = "cr", k=20), data = data.frame(met_med_lz_q5))
+plot(model2)
+summary(model2)
+```
+
