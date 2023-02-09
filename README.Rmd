@@ -198,8 +198,8 @@ atm_us_id <- met_avg_lz |>
   mutate(
     d = abs(atm.press - met_med_lz |> pull(atm.press))
     ) |> 
-  arrange(d) |>
-  slice(1) |>
+  arrange(d) %>% 
+  slice(1) %>% 
   pull (USAFID)
 
 cat("ID with median ...",
@@ -210,24 +210,81 @@ cat("ID with median ...",
 
 ```{r}
 met_lz |>
-  select(USAFID, lon, lat) |>
-  distinct() |>
+  select(USAFID, lon, lat) %>% 
+  distinct() %>% 
   filter(USAFID %in% c(temp_us_id, wind_us_id, atm_us_id))
 ```
 
-These three stations does not coincide as we have three different station.
+These three stations does not coincide as we have three different station. The station that represent temperature is 720458, the wind is 720929, the atmospheric pressure is 722238.
 
 ## Question 2: Representative station per state
 
 Just like the previous question, you are asked to identify what is the most representative, the median, station per state. This time, instead of looking at one variable at a time, look at the euclidean distance. If multiple stations show in the median, select the one located at the lowest latitude.
 
 ```{r}
+# mean for each station
+met_avg_state_lz <- met |> 
+  group_by(USAFID) |> 
+  summarise(
+    temp = mean(temp, na.rm = TRUE),
+    wind.sp = mean(wind.sp, na.rm = TRUE),
+    atm.press = mean(atm.press, na.rm = TRUE),
+    STATE = unique(STATE), lat = unique(lat, na.rm = TRUE)[1], lon = unique(lon, na.rm = TRUE)[1]
+  ) 
+met_avg_state_lz <- na.omit(met_avg_state_lz)
+met_avg_state_lz
+```
+
+
+```{r}
+# Median of all state
+met_med_avg_state_lz <- met_avg_state_lz %>% 
+  group_by(STATE) %>%
+  summarise(across(
+    c(temp, wind.sp, atm.press),
+    function(x) quantile(x, 0.5, na.rm = TRUE)
+  ))
+```
+
+```{r}
+met_means_med_state <- merge(
+  x = met_avg_state_lz,
+  y = met_med_avg_state_lz,
+  by.x = "STATE",
+  by.y = "STATE",
+  all.x = TRUE,
+  all.y = TRUE,
+  na.rm = TRUE
+ )
+```
+
+```{r}
+udist <- function(pt1, pt2, pt3, pt4, pt5, pt6) {
+  sqrt((pt1 - pt2)^2 + (pt3 - pt4)^2 + (pt5 - pt6)^2)
+}
 
 ```
 
 
+```{r}
+met_means_med_state$euclid <-udist(met_means_med_state$temp.x, met_means_med_state$wind.sp.y, met_means_med_state$wind.sp.x, met_means_med_state$atm.press.x, met_means_med_state$temp.y, met_means_med_state$atm.press.y)
+
+met_means_med_state_answer <- met_means_med_state |>
+  group_by(STATE) |>
+  slice_min(euclid) |> slice_min(lat)
+met_means_med_state_answer
+```
+
+
+```{r}
+nrow(met_means_med_state_answer)
+length(unique(met$STATE))
+```
 
 Knit the doc and save it on GitHub.
+
+We have checked that the result has the same number of unique states from the data.
+
 
 ## Question 3: In the middle?
 
